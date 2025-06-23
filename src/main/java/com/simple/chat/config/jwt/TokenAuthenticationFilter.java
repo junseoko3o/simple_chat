@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.server.ServerErrorException;
@@ -61,10 +60,6 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = jwtTokenProvider.expiredTokenGetPayload(token);
             String email = claims.get("email", String.class);
             User user = userDetailService.loadUserByUsername(email);
-            if (!jwtTokenProvider.validateRefreshToken(user)) {
-                throw new AuthenticationException("Invalid RefreshToken") {
-                };
-            }
 
             String newAccessToken = jwtTokenProvider.generateAccessToken(user);
             setAuthentication(newAccessToken);
@@ -73,7 +68,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
 
         } catch (Exception e) {
-            throw new ServerErrorException("Invalid RefreshToken", e);
+            throw new ServerErrorException("Invalid Token", e);
         }
     }
 }

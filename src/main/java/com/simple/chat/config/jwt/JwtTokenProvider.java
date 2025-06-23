@@ -28,9 +28,6 @@ public class JwtTokenProvider {
     @Value("${jwt.access.token.expiration}")
     private int accessTokenExpiration;
 
-    @Value("${jwt.refresh.token.expiration}")
-    private int refreshTokenExpiration;
-
     private UserDetailsService userDetailsService;
 
     private SecretKey getSigningKey() {
@@ -54,40 +51,6 @@ public class JwtTokenProvider {
                 .claims(userToMap(user))
                 .signWith(this.getSigningKey())
                 .compact();
-    }
-
-    public void generateRefreshToken(User user) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiryDate = now.plusSeconds(refreshTokenExpiration / 1000);
-
-        String refreshToken = Jwts.builder()
-                .issuedAt(java.sql.Timestamp.valueOf(now))
-                .expiration(java.sql.Timestamp.valueOf(expiryDate))
-                .signWith(this.getSigningKey())
-                .compact();
-
-//            redisService.setRedis(
-//                    "refreshToken:" + user.getEmail(),
-//                    refreshToken,
-//                    refreshTokenExpiration / 1000
-//            );
-    }
-
-    public boolean validateRefreshToken(User user) {
-//        String token = redisService.getRedis(
-//                "refreshToken:" + user.getEmail()
-//        );
-        String token = "";
-        try {
-            Jwts.parser()
-                    .verifyWith(this.getSigningKey())
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     public boolean validateToken(String token) {

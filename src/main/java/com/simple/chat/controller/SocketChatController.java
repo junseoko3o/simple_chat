@@ -16,14 +16,12 @@ public class SocketChatController {
     @MessageMapping("/chat/message")
     @SendTo("/sub")
     public MessageDto chat(MessageDto messageDto) {
-        return messageDto;
+        return socketChatService.chat(messageDto);
     }
 
     @MessageMapping("/chat/enter")
     @SendTo("/sub")
     public MessageDto newUser(MessageDto messageDto) {
-        messageDto.setType(MessageDto.MessageType.ENTER);
-        messageDto.setMessage(messageDto.getSender() + "입장");
-        return messageDto;
+        return socketChatService.enter(messageDto);
     }
 }

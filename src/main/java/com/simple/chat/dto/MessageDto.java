@@ -1,10 +1,14 @@
 package com.simple.chat.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 @Getter
-@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class MessageDto {
     private String sender;
     private String message;
@@ -12,11 +16,5 @@ public class MessageDto {
 
     public enum MessageType {
         ENTER, CHAT, LEAVE
-    }
-
-    public MessageDto(String sender, String message, MessageType type) {
-        this.sender = sender;
-        this.message = message;
-        this.type = type;
     }
 }

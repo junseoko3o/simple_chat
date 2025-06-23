@@ -56,7 +56,7 @@
                 showMessage(message);
             });
 
-            stompClient.send("/pub/chat.newUser", {}, JSON.stringify({
+            stompClient.send("/pub/chat/enter", {}, JSON.stringify({
                 sender: username,
                 type: "ENTER"
             }));
@@ -76,7 +76,7 @@
         const message = messageInput.value.trim();
         const username = document.getElementById("username").value.trim();
         if (message && stompClient) {
-            stompClient.send("/pub/chat.sendMessage", {}, JSON.stringify({
+            stompClient.send("/pub/chat/message", {}, JSON.stringify({
                 sender: username,
                 message: message,
                 type: "CHAT"

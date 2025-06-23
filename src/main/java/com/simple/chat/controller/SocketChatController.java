@@ -13,13 +13,13 @@ public class SocketChatController {
 
     private final SocketChatService socketChatService;
 
-    @MessageMapping("/chat.sendMessage")
+    @MessageMapping("/chat/message")
     @SendTo("/sub")
     public MessageDto chat(MessageDto messageDto) {
         return messageDto;
     }
 
-    @MessageMapping("/chat.newUser")
+    @MessageMapping("/chat/enter")
     @SendTo("/sub")
     public MessageDto newUser(MessageDto messageDto) {
         messageDto.setType(MessageDto.MessageType.ENTER);

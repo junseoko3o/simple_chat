@@ -15,11 +15,14 @@ public class RedisChatSubscriber implements MessageListener {
     private final ObjectMapper objectMapper;
     private final SimpMessageSendingOperations messagingTemplate;
 
+    /**
+     * Redis에서 메시지 수신 시 호출됨
+     * 메시지를 JSON -> MessageDto로 변환 후 WebSocket 메시지로 해당 사용자에게 전달
+     */
     @Override
     public void onMessage(Message message, byte[] pattern) {
         try {
             String messageBody = new String(message.getBody());
-
             MessageDto messageDto = objectMapper.readValue(messageBody, MessageDto.class);
 
             messagingTemplate.convertAndSendToUser(
@@ -27,16 +30,8 @@ public class RedisChatSubscriber implements MessageListener {
                     "/queue/messages",
                     messageDto
             );
-
-            messagingTemplate.convertAndSendToUser(
-                    messageDto.getSender(),
-                    "/queue/messages",
-                    messageDto
-            );
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 }
-

@@ -63,4 +63,9 @@ public class RedisConfig {
         container.addMessageListener(listenerAdapter, new PatternTopic("chatroom:*"));
         return container;
     }
+
+    @Bean
+    public MessageListenerAdapter listenerAdapter(RedisChatSubscriber subscriber) {
+        return new MessageListenerAdapter(subscriber, "onMessage");
+    }
 }

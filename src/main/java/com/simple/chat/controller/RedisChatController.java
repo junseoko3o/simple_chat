@@ -15,6 +15,12 @@ public class RedisChatController {
 
     private final RedisChatService redisChatService;
 
+    @PostMapping("/chat/room/join")
+    public ResponseEntity<Void> joinRoom(@RequestParam String sender, @RequestParam String receiver) {
+        redisChatService.joinRoom(sender, receiver);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/chat/rooms")
     public ResponseEntity<Set<String>> getChatRooms(@RequestParam String email) {
         Set<String> chatPartners = redisChatService.getChatPartners(email);
@@ -30,6 +36,12 @@ public class RedisChatController {
     @PostMapping("/send")
     public ResponseEntity<Void> sendMessage(@RequestBody MessageDto messageDto) {
         redisChatService.sendMessage(messageDto);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/chat/leave")
+    public ResponseEntity<Void> leaveRoom(@RequestParam String sender, @RequestParam String receiver) {
+        redisChatService.leaveRoom(sender, receiver);
         return ResponseEntity.ok().build();
     }
 }

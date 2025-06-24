@@ -17,6 +17,7 @@ public class PermitAllUrls {
             "/login",
             "/ws-chat/**",
             "/redis.html",
+            "/chat/**",
             "/send"
     );
 

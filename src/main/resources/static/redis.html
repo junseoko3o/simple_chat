@@ -22,7 +22,7 @@
     <input type="email" id="email" placeholder="이메일 입력" /><br /><br />
     <label for="password">비밀번호:</label>
     <input type="password" id="password" placeholder="비밀번호 입력" /><br /><br />
-    <button onclick="login()">로그인</button>
+    <button id="loginBtn">로그인</button>
 </div>
 
 <div id="chatSection">
@@ -30,14 +30,15 @@
     <div>
         <label for="username">닉네임:</label>
         <input type="text" id="username" disabled />
-        <button onclick="disconnect()" id="disconnectBtn" disabled>종료</button>
-        <button id="logoutBtn" onclick="logout()">로그아웃</button>
+        <button id="disconnectBtn" disabled>종료</button>
+        <button id="leaveRoomBtn" disabled>퇴장</button>
+        <button id="logoutBtn">로그아웃</button>
     </div>
 
     <div id="newChatSection">
         <label for="targetUser">새 대화 상대 이메일:</label>
         <input type="text" id="targetUser" placeholder="상대 이메일 입력" />
-        <button onclick="startNewChat()">새 대화 열기</button>
+        <button id="startNewChatBtn">새 대화 열기</button>
     </div>
 
     <div id="chatRoomsSection" style="margin-top: 20px;">
@@ -47,245 +48,332 @@
 
     <div id="chat"></div>
     <input type="text" id="messageInput" placeholder="메시지 입력" disabled />
-    <button onclick="sendMessage()" disabled>전송</button>
+    <button id="sendMessageBtn" disabled>전송</button>
 </div>
 
 <script>
-    let stompClient = null;
-    let accessToken = null;
-    let userEmail = null;
-    let userName = null;
-    let targetUserEmail = null;
+    (() => {
+        let stompClient = null;
+        let messageSubscription = null;
 
-    async function login() {
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value.trim();
+        let accessToken = null;
+        let userEmail = null;
+        let userName = null;
+        let targetUserEmail = null;
 
-        if (!email || !password) {
-            alert("이메일과 비밀번호를 입력하세요.");
-            return;
+        // DOM 요소
+        const loginSection = document.getElementById("loginSection");
+        const chatSection = document.getElementById("chatSection");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const loginBtn = document.getElementById("loginBtn");
+        const disconnectBtn = document.getElementById("disconnectBtn");
+        const leaveRoomBtn = document.getElementById("leaveRoomBtn");
+        const sendMessageBtn = document.getElementById("sendMessageBtn");
+        const startNewChatBtn = document.getElementById("startNewChatBtn");
+
+        const emailInput = document.getElementById("email");
+        const passwordInput = document.getElementById("password");
+        const usernameInput = document.getElementById("username");
+        const targetUserInput = document.getElementById("targetUser");
+        const messageInput = document.getElementById("messageInput");
+        const chatRoomsList = document.getElementById("chatRoomsList");
+        const chatArea = document.getElementById("chat");
+        const newChatSection = document.getElementById("newChatSection");
+
+        // 상태 UI 토글 함수
+        function setConnected(connected) {
+            messageInput.disabled = !connected;
+            sendMessageBtn.disabled = !connected;
+            disconnectBtn.disabled = !connected;
+            leaveRoomBtn.disabled = !connected;
+            newChatSection.style.display = connected ? "none" : "block";
         }
 
-        try {
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            });
+        // 로그인
+        async function login() {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
+            if (!email || !password) return alert("이메일과 비밀번호를 입력하세요.");
 
-            if (!res.ok) {
-                alert("로그인 실패: 이메일 또는 비밀번호를 확인하세요.");
-                return;
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                if (!res.ok) return alert("로그인 실패: 이메일 또는 비밀번호를 확인하세요.");
+
+                const data = await res.json();
+                ({ accessToken, email: userEmail, name: userName } = data);
+
+                loginSection.style.display = "none";
+                chatSection.style.display = "block";
+                logoutBtn.style.display = "inline-block";
+                usernameInput.value = userName;
+
+                alert(`환영합니다, ${userName}님! 새 대화를 열거나 목록에서 채팅방을 선택하세요.`);
+                await loadChatRooms();
+            } catch (e) {
+                alert("서버 오류가 발생했습니다.");
+                console.error(e);
+            }
+        }
+
+        // 연결
+        async function connect() {
+            if (messageSubscription) {
+                try {
+                    messageSubscription.unsubscribe();
+                    console.log("이전 구독 해제");
+                } catch (e) {
+                    console.error("이전 구독 해제 실패", e);
+                }
+                messageSubscription = null;
             }
 
-            const data = await res.json();
-            accessToken = data.accessToken;
-            userEmail = data.email;
-            userName = data.name;
+            if (stompClient?.connected) {
+                await disconnect();
+            }
 
-            document.getElementById("loginSection").style.display = "none";
-            document.getElementById("chatSection").style.display = "block";
-            document.getElementById("logoutBtn").style.display = "inline-block";
-            document.getElementById("username").value = userName;
+            const socket = new SockJS('http://localhost:8080/ws-chat');
+            stompClient = Stomp.over(socket);
 
-            alert(`환영합니다, ${userName}님! 새 대화를 열거나 목록에서 채팅방을 선택하세요.`);
-            loadChatRooms();
-        } catch (error) {
-            alert("서버 오류가 발생했습니다.");
-            console.error(error);
+            return new Promise((resolve, reject) => {
+                stompClient.connect({ Authorization: `Bearer ${accessToken}` }, async () => {
+                    console.log("[CONNECT SUCCESS]");
+
+                    setConnected(true);
+                    await joinRoom();
+
+                    messageSubscription = stompClient.subscribe('/user/queue/messages', (msg) => {
+                        const message = JSON.parse(msg.body);
+                        showMessage(message);
+                    });
+
+                    leaveRoomBtn.disabled = false;
+                    await loadChatMessages();
+
+                    resolve();
+                }, (error) => {
+                    console.error("연결 실패", error);
+                    reject(error);
+                });
+            });
         }
-    }
 
-    async function connect() {
-        if (!targetUserEmail) {
-            alert("상대 이메일이 없습니다.");
-            return;
-        }
-
-        const socket = new SockJS('http://localhost:8080/ws-chat');
-        stompClient = Stomp.over(socket);
-
-        stompClient.connect({ Authorization: `Bearer ${accessToken}` }, async function (frame) {
-            stompClient.debug = null;  // 콘솔 로그 줄이려면 null로
-            setConnected(true);
-            appendMessage("서버에 연결되었습니다.");
-
-            const roomId = getRoomId(userEmail, targetUserEmail);
-
+        // 메시지 로드
+        async function loadChatMessages() {
+            if (!targetUserEmail) return;
+            const roomId = [userEmail, targetUserEmail].sort().join(":");
             try {
                 const res = await fetch(`/chat/messages?roomId=${roomId}`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 if (res.ok) {
                     const messages = await res.json();
+                    chatArea.innerHTML = ""; // 메시지 초기화
                     messages.forEach(showMessage);
                 } else {
-                    appendMessage("이전 메시지가 없습니다.");
+                    console.error("메시지 응답 실패", res.status);
                 }
-            } catch (err) {
-                console.error("이전 메시지 불러오기 실패:", err);
+            } catch (e) {
+                console.error("이전 메시지 로딩 실패", e);
             }
+        }
 
-            stompClient.subscribe('/user/queue/messages', function(messageOutput) {
+        // 연결 해제
+        async function disconnect() {
+            if (messageSubscription) {
                 try {
-                    const message = JSON.parse(messageOutput.body);
-                    showMessage(message);
-                } catch (err) {
-                    console.error("메시지 파싱 오류:", err);
+                    messageSubscription.unsubscribe();
+                    console.log("disconnect: 구독 해제 성공");
+                } catch (e) {
+                    console.error("disconnect: 구독 해제 실패", e);
                 }
-            });
-        }, function (error) {
-            alert("서버 연결 실패 또는 인증 실패");
-            console.error(error);
-        });
-    }
-
-    async function disconnect() {
-        if (stompClient) {
-            await new Promise(resolve => {
-                stompClient.disconnect(() => {
-                    resolve();
-                });
-            });
-        }
-        setConnected(false);
-        appendMessage("서버와 연결이 끊어졌습니다.");
-    }
-
-    function setConnected(connected) {
-        document.getElementById("messageInput").disabled = !connected;
-        document.querySelector("#chatSection button[onclick='sendMessage()']").disabled = !connected;
-        document.getElementById("disconnectBtn").disabled = !connected;
-        document.getElementById("newChatSection").style.display = connected ? "none" : "block";
-    }
-
-    async function sendMessage() {
-        const messageInput = document.getElementById("messageInput");
-        const message = messageInput.value.trim();
-
-        if (!message) {
-            alert("메시지를 입력하세요.");
-            return;
-        }
-
-        try {
-            await fetch("/send", {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({
-                    sender: userEmail,
-                    receiver: targetUserEmail,
-                    type: "CHAT",
-                    message: message
-                })
-            });
-
-            messageInput.value = "";
-        } catch (error) {
-            alert("메시지 전송 실패");
-            console.error(error);
-        }
-    }
-
-    function appendMessage(text) {
-        const chat = document.getElementById("chat");
-        const p = document.createElement("p");
-        p.textContent = text;
-        chat.appendChild(p);
-        chat.scrollTop = chat.scrollHeight;
-    }
-
-    function showMessage(message) {
-        if (!message) return;
-        if (message.type === "ENTER") {
-            appendMessage(`[알림] ${message.message}`);
-        } else if (message.type === "CHAT") {
-            appendMessage(`${message.sender}: ${message.message}`);
-        } else {
-            appendMessage(`[메시지] ${JSON.stringify(message)}`);
-        }
-    }
-
-    function logout() {
-        disconnect();
-        accessToken = null;
-        userEmail = null;
-        userName = null;
-        targetUserEmail = null;
-        stompClient = null;
-        document.getElementById("chatSection").style.display = "none";
-        document.getElementById("loginSection").style.display = "block";
-        document.getElementById("email").value = "";
-        document.getElementById("password").value = "";
-        document.getElementById("chat").innerHTML = "";
-        setConnected(false);
-    }
-
-    async function loadChatRooms() {
-        try {
-            const res = await fetch(`/chat/rooms?email=${encodeURIComponent(userEmail)}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
-            });
-            if (!res.ok) throw new Error('채팅방 목록 불러오기 실패');
-
-            const rooms = await res.json();
-            console.log('채팅방 목록:', rooms);
-
-            const listEl = document.getElementById('chatRoomsList');
-            listEl.innerHTML = ''; // 초기화
-
-            if (!rooms.length) {
-                listEl.innerHTML = '<li>채팅방이 없습니다.</li>';
-                return;
+                messageSubscription = null;
             }
 
-            rooms.forEach(opponentEmail => {
-                console.log(opponentEmail)
-                if (!opponentEmail) return;
-
-                const li = document.createElement('li');
-                li.textContent = opponentEmail;
-                li.style.cursor = 'pointer';
-                li.style.padding = '5px';
-                li.addEventListener('click', () => openChatRoomWithOpponent(opponentEmail));
-                listEl.appendChild(li);
-            });
-
-        } catch (err) {
-            console.error('채팅방 목록 로드 실패:', err);
+            if (stompClient) {
+                await new Promise(resolve => {
+                    stompClient.disconnect(() => {
+                        console.log("Disconnected");
+                        resolve();
+                    });
+                });
+                stompClient = null;
+            }
+            setConnected(false);
         }
-    }
 
-    async function openChatRoomWithOpponent(opponentEmail) {
-        targetUserEmail = opponentEmail;
-        document.getElementById("targetUser").value = opponentEmail;
-        document.getElementById("chat").innerHTML = "";  // 채팅창 초기화
+        // 메시지 전송
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return alert("메시지를 입력하세요.");
+            if (!targetUserEmail) return alert("채팅방을 선택하세요.");
 
-        if (stompClient && stompClient.connected) {
+            const roomId = [userEmail, targetUserEmail].sort().join(":");
+
+            try {
+                await fetch("/send", {
+                    method: "POST",
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        sender: userEmail,
+                        receiver: targetUserEmail,
+                        type: "CHAT",
+                        message,
+                        roomId
+                    })
+                });
+                messageInput.value = "";
+                showMessage({ sender: userEmail, message, type: "CHAT" });
+            } catch (e) {
+                alert("메시지 전송 실패");
+                console.error(e);
+            }
+        }
+
+        // 메시지 화면에 표시
+        function showMessage({ sender, receiver, message, type }) {
+            if (!message) return;
+            const p = document.createElement("p");
+
+            if (type === "CHAT") {
+                if (sender === userEmail) {
+                    p.textContent = `나: ${message}`;
+                    p.style.textAlign = "right";
+                } else {
+                    p.textContent = `${sender}: ${message}`;
+                    p.style.textAlign = "left";
+                }
+            } else if (type === "ENTER") {
+                p.textContent = `[알림] ${message}`;
+                p.style.textAlign = "center";
+                p.style.color = "gray";
+            } else {
+                p.textContent = `[메시지] ${JSON.stringify({ sender, receiver, message, type })}`;
+                p.style.textAlign = "center";
+                p.style.color = "gray";
+            }
+
+            chatArea.appendChild(p);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        // 채팅방 참여
+        async function joinRoom() {
+            if (!userEmail || !targetUserEmail) return;
+            try {
+                await fetch(`/chat/room/join?sender=${userEmail}&receiver=${targetUserEmail}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+            } catch (e) {
+                console.error('채팅방 참여 실패:', e);
+            }
+        }
+
+        // 채팅방 퇴장
+        async function leaveRoom() {
+            if (!userEmail || !targetUserEmail) return;
+
+            try {
+                const res = await fetch(`/chat/leave?sender=${userEmail}&receiver=${targetUserEmail}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!res.ok) alert('채팅방 퇴장 실패');
+                else console.log('채팅방 퇴장 성공');
+            } catch (e) {
+                console.error('채팅방 퇴장 오류', e);
+            }
+
             await disconnect();
+
+            // 메시지 비우고 상태 초기화
+            chatArea.innerHTML = "";
+            setConnected(false);
+            targetUserEmail = null;
         }
 
-        await connect();
-    }
+        // 새 대화 시작
+        async function startNewChat() {
+            const targetEmail = targetUserInput.value.trim();
+            if (!targetEmail) return alert("상대 이메일을 입력하세요.");
+            if (targetEmail === userEmail) return alert("자신과는 대화를 시작할 수 없습니다.");
 
-    function getRoomId(userA, userB) {
-        return [userA, userB].sort().join(':');
-    }
+            if (stompClient?.connected) {
+                await leaveRoom();
+            }
 
-    function startNewChat() {
-        const opponentEmail = document.getElementById("targetUser").value.trim();
-        if (!opponentEmail) {
-            alert("상대 이메일을 입력하세요.");
-            return;
+            targetUserEmail = targetEmail;
+            targetUserInput.value = "";
+
+            await connect();
         }
-        openChatRoomWithOpponent(opponentEmail);
-    }
+
+        // 채팅방 목록 로드
+        async function loadChatRooms() {
+            if (!userEmail) return;
+
+            try {
+                const res = await fetch(`/chat/rooms?email=${userEmail}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!res.ok) {
+                    alert("채팅방 로딩 실패");
+                    return;
+                }
+
+                const rooms = await res.json();
+                chatRoomsList.innerHTML = "";
+                rooms.forEach(room => {
+                    const li = document.createElement("li");
+                    li.textContent = room;
+                    li.onclick = () => loadChatRoom(room);
+                    chatRoomsList.appendChild(li);
+                });
+            } catch (e) {
+                alert("채팅방 로딩 중 오류 발생");
+                console.error(e);
+            }
+        }
+
+        // 채팅방 로드 (선택)
+        async function loadChatRoom(roomId) {
+            if (stompClient?.connected) {
+                await leaveRoom();
+            }
+            targetUserEmail = roomId.split(":").find(email => email !== userEmail);
+            await connect();
+        }
+
+        // 로그아웃
+        async function logout() {
+            await disconnect();
+            chatSection.style.display = "none";
+            loginSection.style.display = "block";
+            logoutBtn.style.display = "none";
+            userEmail = null;
+            userName = null;
+            accessToken = null;
+            targetUserEmail = null;
+            chatArea.innerHTML = "";
+            alert("로그아웃 되었습니다.");
+        }
+
+        // 이벤트 바인딩
+        loginBtn.addEventListener('click', login);
+        logoutBtn.addEventListener('click', logout);
+        disconnectBtn.addEventListener('click', disconnect);
+        leaveRoomBtn.addEventListener('click', leaveRoom);
+        sendMessageBtn.addEventListener('click', sendMessage);
+        startNewChatBtn.addEventListener('click', startNewChat);
+
+    })();
 </script>
 
 </body>

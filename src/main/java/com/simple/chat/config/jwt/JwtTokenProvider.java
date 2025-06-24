@@ -28,7 +28,7 @@ public class JwtTokenProvider {
     @Value("${jwt.access.token.expiration}")
     private int accessTokenExpiration;
 
-    private UserDetailsService userDetailsService;
+    private final UserDetailsService userDetailsService;
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(this.secretKey);
@@ -83,7 +83,6 @@ public class JwtTokenProvider {
 
     public Authentication getAuthentication(String token) {
         Claims claims = getClaims(token);
-
         UserDetails userDetails = userDetailsService.loadUserByUsername(claims.get("email", String.class));
         return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }

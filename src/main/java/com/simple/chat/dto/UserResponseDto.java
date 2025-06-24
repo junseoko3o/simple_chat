@@ -11,7 +11,6 @@ public class UserResponseDto {
     private final Long id;
     private final String email;
     private final String name;
-    private final LocalDateTime loginAt;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
 
@@ -20,7 +19,6 @@ public class UserResponseDto {
                 .id(user.getId())
                 .email(user.getEmail())
                 .name(user.getUsername())
-                .loginAt(user.getLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

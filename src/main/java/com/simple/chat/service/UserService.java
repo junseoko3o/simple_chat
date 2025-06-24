@@ -33,7 +33,7 @@ public class UserService {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
         User user = User.builder()
                 .email(userSignUpRequestDto.getEmail())
-                .name(userSignUpRequestDto.getUsername())
+                .name(userSignUpRequestDto.getName())
                 .password(encoder.encode(userSignUpRequestDto.getPassword()))
                 .build();
         return userRepository.save(user);

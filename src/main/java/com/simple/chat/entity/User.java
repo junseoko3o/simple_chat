@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -18,6 +19,7 @@ import java.util.List;
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,11 +35,8 @@ public class User implements UserDetails {
     @Column()
     private String password;
 
-    @Column(name = "login_at")
-    private LocalDateTime loginAt;
-
     @CreatedDate
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     protected LocalDateTime createdAt;
 
     @LastModifiedDate
@@ -45,12 +44,11 @@ public class User implements UserDetails {
     protected LocalDateTime updatedAt;
 
     @Builder
-    public User(Long id, String email, String name, String password, LocalDateTime loginAt) {
+    public User(Long id, String email, String name, String password) {
         this.id = id;
         this.email = email;
         this.name = name;
         this.password = password;
-        this.loginAt = loginAt;
     }
 
     @Override
@@ -60,6 +58,7 @@ public class User implements UserDetails {
 
     @Override
     public String getUsername() {
-        return name;
+        return this.email;
     }
+
 }

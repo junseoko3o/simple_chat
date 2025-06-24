@@ -96,6 +96,11 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
+    public String getUserName(String token) {
+        Claims claims = getClaims(token);
+        return claims.get("email", String.class);
+    }
+
     private Map<String, Object> userToMap(User user) {
         Map<String, Object> userMap = new HashMap<>();
 

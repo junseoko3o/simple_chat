@@ -7,15 +7,15 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 public class UserSignUpRequestDto {
-    private String username;
+    private String name;
 
     @Email
     private String email;
 
     private String password;
 
-    public UserSignUpRequestDto(String username, String email, String password) {
-        this.username = username;
+    public UserSignUpRequestDto(String name, String email, String password) {
+        this.name = name;
         this.email = email;
         this.password = password;
     }

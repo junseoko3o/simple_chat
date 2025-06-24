@@ -5,9 +5,9 @@ import com.simple.chat.service.SocketChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Controller;
 
-@RestController
+@Controller
 @RequiredArgsConstructor
 public class SocketChatController {
 
@@ -24,4 +24,9 @@ public class SocketChatController {
     public MessageDto newUser(MessageDto messageDto) {
         return socketChatService.enter(messageDto);
     }
+
+//    @MessageMapping("/chat/group/message")
+//    public void groupChat(MessageDto messageDto) {
+//        socketChatService.sendToGroup(messageDto.getRoomId(), messageDto);
+//    }
 }

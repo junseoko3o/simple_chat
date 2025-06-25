@@ -8,7 +8,6 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.listener.PatternTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
@@ -51,16 +50,11 @@ public class RedisConfig {
     }
 
     @Bean
-    public MessageListenerAdapter messageListenerAdapter(RedisChatSubscriber subscriber) {
-        return new MessageListenerAdapter(subscriber);
-    }
-
-    @Bean
     public RedisMessageListenerContainer redisMessageListenerContainer(RedisConnectionFactory connectionFactory,
                                                                        MessageListenerAdapter listenerAdapter) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
-        container.addMessageListener(listenerAdapter, new PatternTopic("chatroom:*"));
+//        container.addMessageListener(listenerAdapter, new ChannelTopic("chatroom"));
         return container;
     }
 

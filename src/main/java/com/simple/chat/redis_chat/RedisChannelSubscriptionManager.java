@@ -15,7 +15,6 @@ public class RedisChannelSubscriptionManager {
 
     private final RedisMessageListenerContainer listenerContainer;
     private final MessageListenerAdapter listenerAdapter;
-
     private final Map<String, ChannelTopic> topicMap = new ConcurrentHashMap<>();
 
     /**
@@ -50,5 +49,10 @@ public class RedisChannelSubscriptionManager {
             listenerContainer.removeMessageListener(listenerAdapter, topic);
             System.out.println("[Unsubscribed] " + channelName);
         }
+    }
+
+    public boolean isSubscribed(String roomId) {
+        String channelName = "chatroom:" + roomId;
+        return topicMap.containsKey(channelName);
     }
 }

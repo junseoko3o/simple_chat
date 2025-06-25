@@ -27,7 +27,7 @@ public class RedisChatSubscriber implements MessageListener {
 
             messagingTemplate.convertAndSendToUser(
                     messageDto.getReceiver(),
-                    "/queue/messages",
+                    "/sub/messages",
                     messageDto
             );
         } catch (Exception e) {

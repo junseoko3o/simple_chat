@@ -12,6 +12,14 @@
         #chatRoomsList li { cursor: pointer; padding: 5px; }
         #chatRoomsList li:hover { background-color: #eee; }
         #newChatSection { margin-top: 10px; }
+        .alert-dot {
+            display:inline-block;
+            width:8px;
+            height:8px;
+            background:red;
+            border-radius:50%;
+            margin-left:5px;
+        }
     </style>
 </head>
 <body>
@@ -52,11 +60,9 @@
 </div>
 
 <script>
-
     (() => {
         let stompClient = null;
         let messageSubscription = null;
-
         let accessToken = null;
         let userEmail = null;
         let userName = null;
@@ -81,42 +87,41 @@
         const chatArea = document.getElementById("chat");
         const newChatSection = document.getElementById("newChatSection");
 
-        function setConnected(connected) {
-            messageInput.disabled = !connected;
-            sendMessageBtn.disabled = !connected;
-            disconnectBtn.disabled = !connected;
-            leaveRoomBtn.disabled = !connected;
-            newChatSection.style.display = connected ? "none" : "block";
+        function setConnected(isConnected) {
+            messageInput.disabled = !isConnected;
+            sendMessageBtn.disabled = !isConnected;
+            disconnectBtn.disabled = !isConnected;
+            leaveRoomBtn.disabled = !isConnected;
+            newChatSection.style.display = isConnected ? "none" : "block";
         }
 
-        window.addEventListener("DOMContentLoaded", async () => {
-            accessToken = localStorage.getItem("accessToken");
+        function updateUIAfterLogin() {
+            loginSection.style.display = "none";
+            chatSection.style.display = "block";
+            logoutBtn.style.display = "inline-block";
+            usernameInput.value = userName;
+        }
 
-            if (accessToken) {
-                try {
-                    const res = await fetch('/user/me', {
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`
-                        }
-                    });
-
-                    if (!res.ok) throw new Error("Unauthorized");
-
-                    const data = await res.json();
-                    userEmail = data.email;
-                    userName = data.name;
-
-                    loginSection.style.display = "none";
-                    chatSection.style.display = "block";
-                    logoutBtn.style.display = "inline-block";
-                    usernameInput.value = userName;
-
-                    await loadChatRooms();
-                } catch (e) {
-                    console.warn("토큰 인증 실패. 다시 로그인 필요:", e);
-                    localStorage.removeItem("accessToken");
-                }
+        async function fetchUserInfo() {
+            try {
+                const res = await fetch('/user/me', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!res.ok) throw new Error("Unauthorized");
+                const data = await res.json();
+                userEmail = data.email;
+                userName = data.name;
+                updateUIAfterLogin();
+                await loadChatRooms();
+            } catch (e) {
+                console.warn("토큰 인증 실패. 다시 로그인 필요:", e);
+                localStorage.removeItem("accessToken");
             }
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            accessToken = localStorage.getItem("accessToken");
+            if (accessToken) fetchUserInfo();
         });
 
         async function login() {
@@ -133,22 +138,13 @@
                 if (!res.ok) return alert("로그인 실패: 이메일 또는 비밀번호를 확인하세요.");
 
                 const data = await res.json();
-                ({ accessToken, email: userEmail, name: userName } = data);
-
-                loginSection.style.display = "none";
-                chatSection.style.display = "block";
-                logoutBtn.style.display = "inline-block";
-                usernameInput.value = userName;
+                accessToken = data.accessToken;
+                userEmail = data.email;
+                userName = data.name;
 
                 localStorage.setItem("accessToken", accessToken);
-
-                loginSection.style.display = "none";
-                chatSection.style.display = "block";
-                logoutBtn.style.display = "inline-block";
-                usernameInput.value = userName;
-
+                updateUIAfterLogin();
                 alert(`환영합니다, ${userName}님! 새 대화를 열거나 목록에서 채팅방을 선택하세요.`);
-
                 await loadChatRooms();
             } catch {
                 alert("서버 오류가 발생했습니다.");
@@ -156,10 +152,7 @@
         }
 
         async function connect() {
-            if (stompClient && stompClient.connected) {
-                console.log("Already connected.");
-                return;  // 중복 연결 방지
-            }
+            if (stompClient?.connected) return console.log("Already connected.");
 
             const socket = new SockJS('http://localhost:8080/ws-chat');
             stompClient = Stomp.over(socket);
@@ -170,32 +163,38 @@
 
                     await joinRoom();
 
-                    if (messageSubscription) {
-                        messageSubscription.unsubscribe();
-                        messageSubscription = null;
-                    }
-
-                    messageSubscription = stompClient.subscribe('/user/sub/messages', (msg) => {
+                    messageSubscription?.unsubscribe();
+                    messageSubscription = stompClient.subscribe('/user/sub/messages', msg => {
                         const message = JSON.parse(msg.body);
-                        if (message.sender !== userEmail) {
-                            showMessage(message);
-                        }
+                        if (message.sender !== userEmail) showMessage(message);
+                    });
+
+                    stompClient.subscribe("/user/sub/alerts", alert => {
+                        const alertText = alert.body;
+                        const emailMatch = alertText.match(/(\S+@.+?)님/);
+                        if (!emailMatch) return;
+
+                        const alertEmail = emailMatch[1].toLowerCase();
+                        chatRoomsList.querySelectorAll('li').forEach(li => {
+                            const email = (li.dataset.email || li.textContent).trim().toLowerCase();
+                            if (email === alertEmail && !li.querySelector(".alert-dot")) {
+                                const dot = document.createElement("span");
+                                dot.className = "alert-dot";
+                                li.appendChild(dot);
+                            }
+                        });
                     });
 
                     leaveRoomBtn.disabled = false;
                     await loadChatMessages();
 
                     resolve();
-                }, () => {
-                    reject();
-                });
+                }, () => reject());
             });
         }
 
         async function loadChatRoom(targetEmail) {
-            if (stompClient?.connected) {
-                await leaveRoom();
-            }
+            if (stompClient?.connected) await leaveRoom();
             targetUserEmail = targetEmail;
             await connect();
         }
@@ -206,11 +205,11 @@
                 const res = await fetch(`/chat/messages?sender=${userEmail}&receiver=${targetUserEmail}`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (res.ok) {
-                    const messages = await res.json();
-                    messages.forEach(showMessage);
-                    chatArea.scrollTop = chatArea.scrollHeight;
-                }
+                if (!res.ok) return;
+                const messages = await res.json();
+                chatArea.innerHTML = "";
+                messages.forEach(showMessage);
+                chatArea.scrollTop = chatArea.scrollHeight;
             } catch {}
         }
 
@@ -220,11 +219,7 @@
                 messageSubscription = null;
             }
             if (stompClient) {
-                await new Promise(resolve => {
-                    stompClient.disconnect(() => {
-                        resolve();
-                    });
-                });
+                await new Promise(resolve => stompClient.disconnect(resolve));
                 stompClient = null;
             }
             setConnected(false);
@@ -257,30 +252,25 @@
             }
         }
 
-        function showMessage({ sender, receiver, message, type }) {
+        function showMessage({ sender, message, type }) {
             if (!message) return;
             const p = document.createElement("p");
 
-            if (type === "CHAT") {
-                if (sender === userEmail) {
-                    p.textContent = `나: ${message}`;
-                    p.style.textAlign = "right";
-                } else {
-                    p.textContent = `${sender}: ${message}`;
-                    p.style.textAlign = "left";
-                }
-            } else if (type === "ENTER") {
-                p.textContent = `[알림] ${message}`;
-                p.style.textAlign = "center";
-                p.style.color = "gray";
-            } else if (type === "LEAVE") {
-                p.textContent = `[알림] ${message}`;
-                p.style.textAlign = "center";
-                p.style.color = "gray";
-            } else {
-                p.textContent = `[메시지] ${JSON.stringify({ sender, receiver, message, type })}`;
-                p.style.textAlign = "center";
-                p.style.color = "gray";
+            switch(type) {
+                case "CHAT":
+                    p.textContent = sender === userEmail ? `나: ${message}` : `${sender}: ${message}`;
+                    p.style.textAlign = sender === userEmail ? "right" : "left";
+                    break;
+                case "ENTER":
+                case "LEAVE":
+                    p.textContent = `[알림] ${message}`;
+                    p.style.textAlign = "center";
+                    p.style.color = "gray";
+                    break;
+                default:
+                    p.textContent = `[메시지] ${JSON.stringify({ sender, message, type })}`;
+                    p.style.textAlign = "center";
+                    p.style.color = "gray";
             }
 
             chatArea.appendChild(p);
@@ -294,9 +284,7 @@
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (res.ok) {
-                    roomId = await res.text();
-                }
+                if (res.ok) roomId = await res.text();
             } catch {}
         }
 
@@ -309,7 +297,6 @@
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 if (res.ok) {
-                    // 퇴장 알림 메시지 표시
                     showMessage({ type: "LEAVE", message: `${userName}님이 퇴장했습니다.` });
                 }
             } catch {}
@@ -326,9 +313,7 @@
             if (!targetEmail) return alert("상대 이메일을 입력하세요.");
             if (targetEmail === userEmail) return alert("자신과는 대화를 시작할 수 없습니다.");
 
-            if (stompClient?.connected) {
-                await leaveRoom();
-            }
+            if (stompClient?.connected) await leaveRoom();
             targetUserEmail = targetEmail;
             targetUserInput.value = "";
 
@@ -352,8 +337,13 @@
                 rooms.forEach(room => {
                     const li = document.createElement("li");
                     li.textContent = room;
-                    li.onclick = () => loadChatRoom(room);
+                    li.dataset.email = room;
                     chatRoomsList.appendChild(li);
+
+                    li.addEventListener('click', async () => {
+                        await loadChatRoom(room);
+                        li.querySelector('.alert-dot')?.remove();
+                    });
                 });
             } catch {
                 alert("채팅방 로딩 중 오류 발생");
@@ -365,15 +355,14 @@
             chatSection.style.display = "none";
             loginSection.style.display = "block";
             logoutBtn.style.display = "none";
-            userEmail = null;
-            userName = null;
-            accessToken = null;
-            targetUserEmail = null;
+
+            userEmail = userName = accessToken = targetUserEmail = roomId = null;
             chatArea.innerHTML = "";
             localStorage.removeItem("accessToken");
             alert("로그아웃 되었습니다.");
         }
 
+        // 이벤트 핸들러 등록
         loginBtn.addEventListener('click', login);
         logoutBtn.addEventListener('click', logout);
         disconnectBtn.addEventListener('click', disconnect);

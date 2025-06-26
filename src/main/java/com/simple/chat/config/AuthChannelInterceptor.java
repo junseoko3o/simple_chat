@@ -31,6 +31,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                 String token = authHeader.substring(7);
                 if (jwtTokenProvider.validateToken(token)) {
                     String username = jwtTokenProvider.getUserName(token);
+                    System.out.println("✅ WebSocket 연결된 사용자 이메일: " + username);
                     SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_USER");
                     UsernamePasswordAuthenticationToken user =
                             new UsernamePasswordAuthenticationToken(username, null, Collections.singleton(authority));

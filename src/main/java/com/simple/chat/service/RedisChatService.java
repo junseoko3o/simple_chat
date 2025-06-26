@@ -2,6 +2,7 @@ package com.simple.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simple.chat.dto.MessageDto;
+import com.simple.chat.kafka.KafkaAlertProducer;
 import com.simple.chat.redis_chat.RedisChannelSubscriptionManager;
 import com.simple.chat.redis_chat.RedisChatPublisher;
 import com.simple.chat.redis_chat.RoomHashService;
@@ -21,7 +22,8 @@ public class RedisChatService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final RedisChannelSubscriptionManager redisChannelSubscriptionManager;
-    private final RoomHashService roomHashService;  // 주입
+    private final RoomHashService roomHashService;
+    private final KafkaAlertProducer kafkaAlertProducer;
 
     private static final String MESSAGE_KEY_PREFIX = "chat:messages:";
     private static final String ROOM_KEY_PREFIX = "chat:rooms:";
@@ -75,7 +77,7 @@ public class RedisChatService {
                 .type(MessageDto.MessageType.ENTER)
                 .roomId(roomId)
                 .build();
-
+        kafkaAlertProducer.sendEnterAlert(receiver, sender);
         sendMessage(enterMessage);
 
         return roomId;
@@ -99,5 +101,6 @@ public class RedisChatService {
         redisTemplate.opsForSet().remove(ROOM_KEY_PREFIX + sender, receiver);
 //        redisTemplate.opsForSet().remove(ROOM_KEY_PREFIX + receiver, sender);
         redisTemplate.delete(MESSAGE_KEY_PREFIX + roomId);
+        kafkaAlertProducer.sendLeaveAlert(receiver, sender);
     }
 }

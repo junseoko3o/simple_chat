@@ -68,16 +68,36 @@ public class RedisChatService {
         redisTemplate.opsForSet().add(ROOM_KEY_PREFIX + receiver, sender);
         String roomId = roomHashService.getRoomId(sender, receiver);
         redisChannelSubscriptionManager.subscribeToRoom(roomId);
+        MessageDto enterMessage = MessageDto.builder()
+                .sender(sender)
+                .receiver(receiver)
+                .message(sender + "님이 입장하였습니다.")
+                .type(MessageDto.MessageType.ENTER)
+                .roomId(roomId)
+                .build();
+
+        sendMessage(enterMessage);
+
         return roomId;
     }
 
     public void leaveRoom(String sender, String receiver) {
         String roomId = roomHashService.getRoomId(sender, receiver);
 
+        MessageDto leaveMessage = MessageDto.builder()
+                .sender(sender)
+                .receiver(receiver)
+                .message(sender + "님이 퇴장하였습니다.")
+                .type(MessageDto.MessageType.LEAVE)
+                .roomId(roomId)
+                .build();
+
+        sendMessage(leaveMessage);
+
         redisChannelSubscriptionManager.unsubscribeFromRoom(roomId);
 
         redisTemplate.opsForSet().remove(ROOM_KEY_PREFIX + sender, receiver);
-        redisTemplate.opsForSet().remove(ROOM_KEY_PREFIX + receiver, sender);
+//        redisTemplate.opsForSet().remove(ROOM_KEY_PREFIX + receiver, sender);
         redisTemplate.delete(MESSAGE_KEY_PREFIX + roomId);
     }
 }

@@ -28,4 +28,8 @@ public class AuthController {
         return ResponseEntity.ok("로그아웃 완료!");
     }
 
+    @GetMapping("/user/me")
+    public ResponseEntity<UserLoginResponseDto> getCurrentUser() {
+        return ResponseEntity.ok(authService.getCurrentUser());
+    }
 }

@@ -52,6 +52,7 @@
 </div>
 
 <script>
+
     (() => {
         let stompClient = null;
         let messageSubscription = null;
@@ -88,6 +89,36 @@
             newChatSection.style.display = connected ? "none" : "block";
         }
 
+        window.addEventListener("DOMContentLoaded", async () => {
+            accessToken = localStorage.getItem("accessToken");
+
+            if (accessToken) {
+                try {
+                    const res = await fetch('/user/me', {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    });
+
+                    if (!res.ok) throw new Error("Unauthorized");
+
+                    const data = await res.json();
+                    userEmail = data.email;
+                    userName = data.name;
+
+                    loginSection.style.display = "none";
+                    chatSection.style.display = "block";
+                    logoutBtn.style.display = "inline-block";
+                    usernameInput.value = userName;
+
+                    await loadChatRooms();
+                } catch (e) {
+                    console.warn("토큰 인증 실패. 다시 로그인 필요:", e);
+                    localStorage.removeItem("accessToken");
+                }
+            }
+        });
+
         async function login() {
             const email = emailInput.value.trim();
             const password = passwordInput.value.trim();
@@ -109,7 +140,15 @@
                 logoutBtn.style.display = "inline-block";
                 usernameInput.value = userName;
 
+                localStorage.setItem("accessToken", accessToken);
+
+                loginSection.style.display = "none";
+                chatSection.style.display = "block";
+                logoutBtn.style.display = "inline-block";
+                usernameInput.value = userName;
+
                 alert(`환영합니다, ${userName}님! 새 대화를 열거나 목록에서 채팅방을 선택하세요.`);
+
                 await loadChatRooms();
             } catch {
                 alert("서버 오류가 발생했습니다.");
@@ -331,6 +370,7 @@
             accessToken = null;
             targetUserEmail = null;
             chatArea.innerHTML = "";
+            localStorage.removeItem("accessToken");
             alert("로그아웃 되었습니다.");
         }
 

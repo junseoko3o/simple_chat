@@ -42,4 +42,22 @@ public class AuthService {
 //        User user = (User) authentication.getPrincipal();
         SecurityContextHolder.clearContext();
     }
+
+    public UserLoginResponseDto getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            throw new IllegalStateException("로그인되지 않았습니다.");
+        }
+
+        String email = authentication.getName();
+
+        User user = userService.findOneUserByEmail(email);
+
+        return new UserLoginResponseDto(
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                null
+        );
+    }
 }

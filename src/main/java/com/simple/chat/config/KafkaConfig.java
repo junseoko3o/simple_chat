@@ -10,4 +10,9 @@ public class KafkaConfig {
     public NewTopic chatAlertsTopic() {
         return new NewTopic("chat-alerts", 1, (short) 1);
     }
+
+    @Bean
+    public NewTopic couponEventTopic() {
+        return new NewTopic("coupon-events", 1, (short) 1);
+    }
 }

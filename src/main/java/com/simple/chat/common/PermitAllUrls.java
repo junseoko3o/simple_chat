@@ -18,7 +18,8 @@ public class PermitAllUrls {
             "/ws-chat/**",
             "/redis.html",
             "/chat/**",
-            "/send"
+            "/send",
+            "/coupon/**"
     );
 
     public boolean isPermitAll(String uri) {
